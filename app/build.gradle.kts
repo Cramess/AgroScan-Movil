@@ -37,6 +37,11 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
@@ -46,6 +51,7 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.play.services.location)
     implementation(libs.play.services.maps)
+    implementation(libs.osmdroid)
     implementation(libs.maps.compose)
     implementation(libs.retrofit)
     implementation(libs.converter.gson)

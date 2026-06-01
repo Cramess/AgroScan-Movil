@@ -18,14 +18,15 @@ import androidx.compose.ui.unit.sp
 import com.tecsup.agroscan.viewmodel.MainViewModel
 
 /**
- * Pantalla de Login conectada al ViewModel para JWT y Roles.
+ * Pantalla de Inicio de Sesión (Login).
+ * Autentica usuarios y gestiona el acceso mediante JWT.
  */
 @Composable
-fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+fun LoginScreen(viewModel: MainViewModel, alTenerExito: () -> Unit) {
+    var correo by remember { mutableStateOf("") }
+    var clave by remember { mutableStateOf("") }
+    var cargando by remember { mutableStateOf(false) }
+    var mensajeError by remember { mutableStateOf<String?>(null) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -58,8 +59,8 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
             Spacer(modifier = Modifier.height(56.dp))
             
             OutlinedTextField(
-                value = email,
-                onValueChange = { email = it; errorMessage = null },
+                value = correo,
+                onValueChange = { correo = it; mensajeError = null },
                 label = { Text("Correo Electrónico") },
                 leadingIcon = { Icon(Icons.Default.Person, null, tint = Color(0xFF007AFF)) },
                 modifier = Modifier.fillMaxWidth(),
@@ -70,8 +71,8 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
             
             OutlinedTextField(
-                value = password,
-                onValueChange = { password = it; errorMessage = null },
+                value = clave,
+                onValueChange = { clave = it; mensajeError = null },
                 label = { Text("Contraseña") },
                 leadingIcon = { Icon(Icons.Default.Lock, null, tint = Color(0xFF007AFF)) },
                 visualTransformation = PasswordVisualTransformation(),
@@ -80,27 +81,27 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                 singleLine = true
             )
             
-            if (errorMessage != null) {
+            if (mensajeError != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(text = errorMessage!!, color = Color.Red, fontSize = 12.sp)
+                Text(text = mensajeError!!, color = Color.Red, fontSize = 12.sp)
             }
 
             Spacer(modifier = Modifier.height(40.dp))
             
             Button(
                 onClick = {
-                    isLoading = true
-                    viewModel.login(email, password) { success ->
-                        isLoading = false
-                        if (success) onLoginSuccess()
-                        else errorMessage = "Credenciales incorrectas"
+                    cargando = true
+                    viewModel.login(correo, clave) { exito ->
+                        cargando = false
+                        if (exito) alTenerExito()
+                        else mensajeError = "Credenciales incorrectas"
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(28.dp),
-                enabled = !isLoading
+                enabled = !cargando
             ) {
-                if (isLoading) {
+                if (cargando) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
                 } else {
                     Text("Iniciar Sesión", fontSize = 17.sp, fontWeight = FontWeight.Bold)

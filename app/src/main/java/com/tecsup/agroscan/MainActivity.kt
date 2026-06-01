@@ -24,50 +24,53 @@ import com.tecsup.agroscan.ui.theme.AgroScanTheme
 import com.tecsup.agroscan.viewmodel.MainViewModel
 import java.util.*
 
+/**
+ * Actividad Principal.
+ * Gestiona los permisos del sistema y el flujo de navegación raíz.
+ */
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
-    private val requestPermissionsLauncher = registerForActivityResult(
+    private val lanzadorPermisos = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        viewModel.isLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+    ) { permisos ->
+        viewModel.isLocationGranted = permisos[Manifest.permission.ACCESS_FINE_LOCATION] == true
         if (viewModel.isLocationGranted) {
-            fetchLocation()
+            obtenerUbicacion()
         }
-        viewModel.isCameraGranted = permissions[Manifest.permission.CAMERA] == true
+        viewModel.isCameraGranted = permisos[Manifest.permission.CAMERA] == true
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         
-        checkInitialPermissions()
+        verificarPermisosIniciales()
 
         setContent {
             AgroScanTheme(darkTheme = viewModel.isDarkTheme) {
-                // Navegación principal basada en el estado de Login del ViewModel
-                var navigationState by rememberSaveable { mutableStateOf(if (viewModel.isLoggedIn) "dashboard" else "login") }
+                // Estado de navegación sincronizado con el login del ViewModel
+                var estadoNavegacion by rememberSaveable { mutableStateOf(if (viewModel.isLoggedIn) "dashboard" else "login") }
                 
-                // Sincronizar estado local con ViewModel (por si expira la sesión)
                 LaunchedEffect(viewModel.isLoggedIn) {
-                    navigationState = if (viewModel.isLoggedIn) "dashboard" else "login"
+                    estadoNavegacion = if (viewModel.isLoggedIn) "dashboard" else "login"
                 }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box(modifier = Modifier.fillMaxSize()) {
-                        if (navigationState == "login") {
+                        if (estadoNavegacion == "login") {
                             Box(modifier = Modifier.padding(innerPadding)) {
                                 LoginScreen(
                                     viewModel = viewModel,
-                                    onLoginSuccess = { navigationState = "dashboard" }
+                                    onLoginSuccess = { estadoNavegacion = "dashboard" }
                                 )
                             }
                         } else {
                             DashboardScreen(
                                 viewModel = viewModel,
-                                onLocationRequest = { requestInitialPermissions() },
-                                onCameraRequest = { requestInitialPermissions() }
+                                onLocationRequest = { solicitarPermisos() },
+                                onCameraRequest = { solicitarPermisos() }
                             )
                         }
                     }
@@ -76,7 +79,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun checkInitialPermissions() {
+    private fun verificarPermisosIniciales() {
         viewModel.isCameraGranted = ContextCompat.checkSelfPermission(
             this, Manifest.permission.CAMERA
         ) == PackageManager.PERMISSION_GRANTED
@@ -86,28 +89,28 @@ class MainActivity : ComponentActivity() {
         ) == PackageManager.PERMISSION_GRANTED
 
         if (viewModel.isLocationGranted) {
-            fetchLocation()
+            obtenerUbicacion()
         }
     }
 
-    private fun requestInitialPermissions() {
-        requestPermissionsLauncher.launch(
+    private fun solicitarPermisos() {
+        lanzadorPermisos.launch(
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.CAMERA)
         )
     }
 
-    private fun fetchLocation() {
-        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+    private fun obtenerUbicacion() {
+        val clienteUbicacion = LocationServices.getFusedLocationProviderClient(this)
         try {
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                if (location != null) {
-                    val geocoder = Geocoder(this, Locale.getDefault())
+            clienteUbicacion.lastLocation.addOnSuccessListener { ubicacion ->
+                if (ubicacion != null) {
+                    val geocodificador = Geocoder(this, Locale.getDefault())
                     @Suppress("DEPRECATION")
-                    val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-                    if (!addresses.isNullOrEmpty()) {
-                        val city = addresses[0].locality ?: addresses[0].subAdminArea ?: "Ubicación Desconocida"
-                        viewModel.userCity = "$city, ${addresses[0].countryName ?: ""}"
-                        viewModel.fetchRealWeather(location.latitude, location.longitude)
+                    val direcciones = geocodificador.getFromLocation(ubicacion.latitude, ubicacion.longitude, 1)
+                    if (!direcciones.isNullOrEmpty()) {
+                        val ciudad = direcciones[0].locality ?: direcciones[0].subAdminArea ?: "Ubicación Desconocida"
+                        viewModel.userCity = "$ciudad, ${direcciones[0].countryName ?: ""}"
+                        viewModel.fetchRealWeather(ubicacion.latitude, ubicacion.longitude)
                     }
                 }
             }

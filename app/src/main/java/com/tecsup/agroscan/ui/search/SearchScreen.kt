@@ -1,7 +1,6 @@
 package com.tecsup.agroscan.ui.search
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,8 +19,26 @@ import androidx.compose.ui.unit.sp
 import com.tecsup.agroscan.viewmodel.MainViewModel
 import com.tecsup.agroscan.data.AnalysisResult
 
+/**
+ * Pantalla de Historial de Análisis.
+ * Muestra la lista de diagnósticos realizados por la IA.
+ */
 @Composable
 fun SearchScreen(viewModel: MainViewModel) {
+    var consultaBusqueda by remember { mutableStateOf("") }
+    
+    // Filtrado dinámico por nombre de planta o enfermedad
+    val historialFiltrado = remember(consultaBusqueda, viewModel.analysisHistory.size) {
+        if (consultaBusqueda.isEmpty()) {
+            viewModel.analysisHistory
+        } else {
+            viewModel.analysisHistory.filter { 
+                it.plantName.contains(consultaBusqueda, ignoreCase = true) || 
+                it.description.contains(consultaBusqueda, ignoreCase = true) 
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -37,20 +54,43 @@ fun SearchScreen(viewModel: MainViewModel) {
             color = MaterialTheme.colorScheme.onBackground
         )
 
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Buscador estilo One UI
+        OutlinedTextField(
+            value = consultaBusqueda,
+            onValueChange = { consultaBusqueda = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Buscar análisis...") },
+            leadingIcon = { Icon(Icons.Default.Search, null) },
+            shape = RoundedCornerShape(24.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface
+            ),
+            singleLine = true
+        )
+
         Spacer(modifier = Modifier.height(24.dp))
 
-        if (viewModel.analysisHistory.isEmpty()) {
+        if (historialFiltrado.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No hay análisis registrados", color = Color.Gray)
+                Text(
+                    text = if (consultaBusqueda.isEmpty()) "No hay análisis registrados" else "Sin resultados",
+                    color = Color.Gray
+                )
             }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 120.dp),
+                contentPadding = PaddingValues(bottom = 140.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(viewModel.analysisHistory) { analysis ->
-                    HistoryCard(analysis)
+                items(
+                    items = historialFiltrado,
+                    key = { it.date + it.time + it.plantName }
+                ) { analisis ->
+                    TarjetaHistorialCompleta(analisis)
                 }
             }
         }
@@ -58,10 +98,10 @@ fun SearchScreen(viewModel: MainViewModel) {
 }
 
 @Composable
-fun HistoryCard(analysis: AnalysisResult) {
+fun TarjetaHistorialCompleta(analisis: AnalysisResult) {
     Surface(
         shape = RoundedCornerShape(28.dp),
-        color = Color.White,
+        color = MaterialTheme.colorScheme.surface,
         shadowElevation = 2.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -69,40 +109,65 @@ fun HistoryCard(analysis: AnalysisResult) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     shape = CircleShape,
-                    color = analysis.color.copy(alpha = 0.15f),
-                    modifier = Modifier.size(40.dp)
+                    color = analisis.color.copy(alpha = 0.15f),
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
-                        analysis.icon, 
-                        contentDescription = null, 
+                        analisis.icon, 
+                        null, 
                         modifier = Modifier.padding(10.dp),
-                        tint = analysis.color
+                        tint = analisis.color
                     )
                 }
                 Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Text(text = analysis.plantName, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                    Text(text = analysis.date, fontSize = 12.sp, color = Color.Gray)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = analisis.plantName, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Schedule, null, modifier = Modifier.size(12.dp), tint = Color.Gray)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(text = "${analisis.date} • ${analisis.time}", fontSize = 12.sp, color = Color.Gray)
+                    }
                 }
             }
             
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Información sincronizada (Ubicación, Temp, Humedad)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ItemInfoSincro(Icons.Default.LocationOn, analisis.location)
+                ItemInfoSincro(Icons.Default.DeviceThermostat, analisis.temperature)
+                ItemInfoSincro(Icons.Default.WaterDrop, analisis.humidity)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
             
             Text(
-                text = "Resultado: ${analysis.description}",
+                text = analisis.description,
                 fontWeight = FontWeight.SemiBold,
-                color = analysis.color,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 15.sp
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             
             Text(
-                text = analysis.summary,
+                text = analisis.summary,
                 fontSize = 13.sp,
-                color = Color(0xFF6C7075),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 18.sp
             )
         }
+    }
+}
+
+@Composable
+fun ItemInfoSincro(icono: androidx.compose.ui.graphics.vector.ImageVector, texto: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icono, null, modifier = Modifier.size(14.dp), tint = Color(0xFF007AFF))
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(text = texto, fontSize = 11.sp, color = Color.Gray)
     }
 }

@@ -21,19 +21,23 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * Cerebro de la aplicación (ViewModel).
+ * Maneja la lógica de negocio, datos y sincronización.
+ */
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-    private val prefs = application.getSharedPreferences("agroscan_prefs", Context.MODE_PRIVATE)
+    private val preferencias = application.getSharedPreferences("agroscan_prefs", Context.MODE_PRIVATE)
     private val gson = Gson()
 
-    // Configuración APIS
+    // Configuración de APIS
     private val weatherApiKey = "5f0c1c384f0bfb043d85c828865604a7"
     private val roboflowApiKey = "0eETUshIouQdAiHdxL83"
-    private val roboflowProject = "planta-enfermedad-ep6jy"
-    private val roboflowVersion = 2
+    private val roboflowProject = "plant-diseases-9mchz"
+    private val roboflowVersion = "2"
 
     // --- ESTADO DEL USUARIO ---
     var currentUser by mutableStateOf<User?>(null)
-    var isLoggedIn by mutableStateOf(false)
+    var isLoggedIn by mutableStateOf(value = false)
 
     // Estados Globales
     var isDarkTheme by mutableStateOf(value = false)
@@ -50,8 +54,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val roboflowApiService = RoboflowApiService.create()
 
     init {
-        loadSession()
-        loadLocalHistory()
+        cargarSesion()
+        cargarHistorialLocal()
     }
 
     // --- LÓGICA DE USUARIOS ---
@@ -70,8 +74,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 currentUser = mockUser
                 isLoggedIn = true
-                saveSession(mockUser)
-                loadInitialData()
+                guardarSesion(mockUser)
+                cargarDatosIniciales()
                 onResult(true)
             } else {
                 onResult(false)
@@ -79,93 +83,101 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun saveSession(user: User) {
-        prefs.edit().putString("user_session", gson.toJson(user)).apply()
+    private fun guardarSesion(user: User) {
+        preferencias.edit().putString("user_session", gson.toJson(user)).apply()
     }
 
-    private fun loadSession() {
-        val json = prefs.getString("user_session", null)
+    private fun cargarSesion() {
+        val json = preferencias.getString("user_session", null)
         if (json != null) {
             currentUser = gson.fromJson(json, User::class.java)
             isLoggedIn = true
-            loadInitialData()
+            cargarDatosIniciales()
         }
     }
 
     fun logout() {
         currentUser = null
         isLoggedIn = false
-        prefs.edit().remove("user_session").apply()
+        preferencias.edit().remove("user_session").apply()
     }
 
     // --- PERSISTENCIA DE DATOS ---
 
-    private fun loadInitialData() {
-        val zonesJson = prefs.getString("saved_zones", null)
-        if (zonesJson != null) {
+    private fun cargarDatosIniciales() {
+        val jsonZonas = preferencias.getString("saved_zones", null)
+        if (jsonZonas != null) {
             try {
-                val type = object : TypeToken<List<ZoneInfo>>() {}.type
-                val savedZones: List<ZoneInfo> = gson.fromJson(zonesJson, type)
+                val tipo = object : TypeToken<List<ZoneInfo>>() {}.type
+                val zonasGuardadas: List<ZoneInfo> = gson.fromJson(jsonZonas, tipo)
                 zones.clear()
-                zones.addAll(savedZones)
+                zones.addAll(zonasGuardadas)
             } catch (e: Exception) {
-                Log.e("VM", "Error loading zones", e)
-                loadDefaultZones()
+                Log.e("VM", "Error cargando zonas", e)
+                cargarZonasPorDefecto()
             }
         } else {
-            loadDefaultZones()
+            cargarZonasPorDefecto()
         }
     }
 
-    private fun loadDefaultZones() {
+    private fun cargarZonasPorDefecto() {
         zones.clear()
         zones.addAll(listOf(
             ZoneInfo("Campo Norte", "Espárrago (UC157)", Color(0xFF2ECC71), 27, LatLng(-14.0678, -75.7286), 250.0, "10/02/2024", "", "Saludable"),
             ZoneInfo("Campo Sur", "Palta (Hass)", Color(0xFFFFB300), 45, LatLng(-14.0700, -75.7300), 180.0, "15/01/2024", "", "Vigilancia")
         ))
-        saveLocalZones()
+        guardarZonasLocales()
     }
 
-    private fun saveLocalZones() {
-        prefs.edit().putString("saved_zones", gson.toJson(zones.toList())).apply()
+    private fun guardarZonasLocales() {
+        preferencias.edit().putString("saved_zones", gson.toJson(zones.toList())).apply()
     }
 
-    private fun loadLocalHistory() {
-        val historyJson = prefs.getString("analysis_history", null)
-        if (historyJson != null) {
+    private fun cargarHistorialLocal() {
+        val jsonHistorial = preferencias.getString("analysis_history", null)
+        if (jsonHistorial != null) {
             try {
-                val type = object : TypeToken<List<AnalysisResult>>() {}.type
+                val tipo = object : TypeToken<List<AnalysisResult>>() {}.type
                 analysisHistory.clear()
-                analysisHistory.addAll(gson.fromJson(historyJson, type))
-            } catch (e: Exception) { Log.e("VM", "History error", e) }
+                analysisHistory.addAll(gson.fromJson(jsonHistorial, tipo))
+            } catch (e: Exception) { Log.e("VM", "Error historial", e) }
         }
     }
 
-    private fun saveLocalHistory() {
-        prefs.edit().putString("analysis_history", gson.toJson(analysisHistory.toList())).apply()
+    private fun guardarHistorialLocal() {
+        preferencias.edit().putString("analysis_history", gson.toJson(analysisHistory.toList())).apply()
     }
 
     fun addZone(zone: ZoneInfo) {
         zones.add(zone)
-        saveLocalZones()
+        guardarZonasLocales()
     }
 
     fun removeZone(zone: ZoneInfo) {
         zones.remove(zone)
-        saveLocalZones()
+        guardarZonasLocales()
+    }
+
+    fun updateZone(oldZone: ZoneInfo, newZone: ZoneInfo) {
+        val index = zones.indexOf(oldZone)
+        if (index != -1) {
+            zones[index] = newZone
+            guardarZonasLocales()
+        }
     }
 
     fun updateZoneFromAI(zoneName: String, status: String) {
         val index = zones.indexOfFirst { it.name == zoneName }
         if (index != -1) {
-            val zone = zones[index]
-            val newColor = when {
+            val zona = zones[index]
+            val colorNuevo = when {
                 status.contains("Saludable", true) -> Color(0xFF2ECC71)
                 status.contains("Vigilancia", true) -> Color(0xFFFFB300)
                 else -> Color(0xFFE57373)
             }
-            zones[index] = zone.copy(cropStatus = status, color = newColor)
-            saveLocalZones()
+            zones[index] = zona.copy(cropStatus = status, color = colorNuevo)
+            guardarZonasLocales()
         }
     }
 
@@ -174,7 +186,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val response = weatherApiService.getCurrentWeather(lat, lon, weatherApiKey)
                 realWeatherData = WeatherData(response.name, "${response.main.temp.toInt()}°C", "${response.main.humidity}%", "${response.wind.speed} km/h", "UV 7", "0.0mm")
-            } catch (e: Exception) { Log.e("VM", "Weather error", e) }
+            } catch (e: Exception) { Log.e("VM", "Error clima", e) }
+        }
+    }
+
+    /**
+     * Traduce los resultados de la IA al español.
+     */
+    private fun translateResult(englishName: String): String {
+        val name = englishName.lowercase()
+        return when {
+            name.contains("healthy") -> "Planta Saludable"
+            name.contains("rice leaf smut") -> "Mancha Foliar (Arroz)"
+            name.contains("bacterial leaf blight") -> "Tizón Bacteriano"
+            name.contains("brown spot") -> "Mancha Parda"
+            name.contains("leaf blast") -> "Piricularia (Quemado)"
+            name.contains("rust") -> "Roya (Hongo)"
+            name.contains("smut") -> "Falso Carbón"
+            name.contains("blight") -> "Tizón / Añublo"
+            name.contains("spot") -> "Mancha Foliar"
+            else -> englishName
         }
     }
 
@@ -184,27 +215,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val requestBody = base64Image.toRequestBody("text/plain".toMediaType())
                 val response = roboflowApiService.detectDisease(roboflowProject, roboflowVersion, roboflowApiKey, requestBody)
                 
-                val result = if (response.predictions.isNotEmpty()) {
-                    val best = response.predictions.maxByOrNull { it.confidence }
-                    "${best?.className} (${(best!!.confidence * 100).toInt()}%)"
-                } else "Saludable"
+                val rawResult = if (response.predictions.isNotEmpty()) {
+                    response.predictions.maxByOrNull { it.confidence }?.className ?: "Healthy"
+                } else "Healthy"
 
-                val date = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date())
+                val translatedResult = translateResult(rawResult)
+                val confidence = if (response.predictions.isNotEmpty()) {
+                    " (${(response.predictions.maxByOrNull { it.confidence }!!.confidence * 100).toInt()}%)"
+                } else ""
+
+                val fullResultText = translatedResult + confidence
+                val now = Date()
+                val dateStr = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(now)
+                val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(now)
+                
                 val historyItem = AnalysisResult(
                     title = "Análisis IA",
                     plantName = zoneName,
-                    description = result,
+                    description = fullResultText,
                     icon = Icons.Default.AutoAwesome,
-                    color = if (result.contains("Saludable")) Color(0xFF2ECC71) else Color(0xFFE57373),
-                    date = date,
-                    summary = "Diagnóstico completado."
+                    color = if (translatedResult.contains("Saludable")) Color(0xFF2ECC71) else Color(0xFFE57373),
+                    date = dateStr,
+                    time = timeStr,
+                    location = userCity,
+                    temperature = realWeatherData?.temp ?: "26°C",
+                    humidity = realWeatherData?.humidity ?: "60%",
+                    summary = "Sincronización exitosa: El diagnóstico indica $translatedResult."
                 )
                 
                 analysisHistory.add(0, historyItem)
-                saveLocalHistory()
-                updateZoneFromAI(zoneName, result)
-                onResult(result)
-            } catch (e: Exception) { onResult("Error IA") }
+                guardarHistorialLocal()
+                updateZoneFromAI(zoneName, translatedResult)
+                onResult(fullResultText)
+            } catch (e: Exception) {
+                Log.e("VM", "Error IA", e)
+                onResult("Error de conexión con la IA")
+            }
         }
     }
 

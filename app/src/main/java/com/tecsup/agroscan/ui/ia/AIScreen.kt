@@ -25,63 +25,67 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.tecsup.agroscan.data.AnalysisResult
 import com.tecsup.agroscan.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 
+/**
+ * Pantalla de Análisis con Inteligencia Artificial.
+ * Escanea plantas y detecta enfermedades en tiempo real.
+ */
 @Composable
 fun AIScreen(viewModel: MainViewModel) {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+    val contexto = LocalContext.current
+    val cicloVida = LocalLifecycleOwner.current
+    val camaraProductor = remember { ProcessCameraProvider.getInstance(contexto) }
     
-    var isAnalyzing by remember { mutableStateOf(false) }
-    var resultText by remember { mutableStateOf<String?>(null) }
-    var distanceStatus by remember { mutableStateOf("ideal") }
+    var analizando by remember { mutableStateOf(false) }
+    var textoResultado by remember { mutableStateOf<String?>(null) }
+    var estadoDistancia by remember { mutableStateOf("ideal") }
     
-    // Referencia para capturar la imagen
-    val imageCapture = remember { ImageCapture.Builder().build() }
+    val capturaImagen = remember { ImageCapture.Builder().build() }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (viewModel.isCameraGranted) {
             AndroidView(
                 factory = { ctx ->
-                    val previewView = PreviewView(ctx).apply {
+                    val vistaPrevia = PreviewView(ctx).apply {
                         scaleType = PreviewView.ScaleType.FILL_CENTER
                     }
-                    val executor = Executors.newSingleThreadExecutor()
+                    val ejecutor = Executors.newSingleThreadExecutor()
 
-                    cameraProviderFuture.addListener({
-                        val cameraProvider = cameraProviderFuture.get()
+                    camaraProductor.addListener({
+                        val proveedor = camaraProductor.get()
                         val preview = Preview.Builder().build().also {
-                            it.setSurfaceProvider(previewView.surfaceProvider)
+                            it.setSurfaceProvider(vistaPrevia.surfaceProvider)
                         }
 
-                        val imageAnalysis = ImageAnalysis.Builder()
+                        val analisisImagen = ImageAnalysis.Builder()
                             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                             .build()
 
-                        imageAnalysis.setAnalyzer(executor) { imageProxy ->
-                            // Lógica de proximidad (simulada por ahora)
-                            imageProxy.close()
+                        analisisImagen.setAnalyzer(ejecutor) { frame ->
+                            // Futura lógica de proximidad con YOLOv8
+                            frame.close()
                         }
 
-                        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                        val selector = CameraSelector.DEFAULT_BACK_CAMERA
                         try {
-                            cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
-                                lifecycleOwner, 
-                                cameraSelector, 
+                            proveedor.unbindAll()
+                            proveedor.bindToLifecycle(
+                                cicloVida, 
+                                selector, 
                                 preview, 
-                                imageCapture, 
-                                imageAnalysis
+                                capturaImagen, 
+                                analisisImagen
                             )
                         } catch (e: Exception) {
-                            Log.e("AIScreen", "Error binding camera", e)
+                            Log.e("AIScreen", "Error vinculando cámara", e)
                         }
                     }, ContextCompat.getMainExecutor(ctx))
-                    previewView
+                    vistaPrevia
                 },
                 modifier = Modifier.fillMaxSize()
             )
@@ -89,14 +93,14 @@ fun AIScreen(viewModel: MainViewModel) {
             LaunchedEffect(Unit) {
                 while(true) {
                     delay(3000)
-                    distanceStatus = listOf("lejos", "cerca", "ideal").random()
+                    estadoDistancia = listOf("lejos", "cerca", "ideal").random()
                 }
             }
         }
 
-        // Overlay y UI
+        // --- INTERFAZ DE USUARIO (OVERLAY) ---
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            val borderColor = when(distanceStatus) {
+            val colorBorde = when(estadoDistancia) {
                 "ideal" -> Color(0xFF2ECC71)
                 "cerca" -> Color(0xFFFFB300)
                 else -> Color(0xFFE57373)
@@ -105,9 +109,9 @@ fun AIScreen(viewModel: MainViewModel) {
                 modifier = Modifier.size(280.dp),
                 color = Color.Transparent,
                 shape = RoundedCornerShape(32.dp),
-                border = androidx.compose.foundation.BorderStroke(3.dp, borderColor.copy(alpha = 0.8f))
+                border = androidx.compose.foundation.BorderStroke(3.dp, colorBorde.copy(alpha = 0.8f))
             ) {
-                if (isAnalyzing) {
+                if (analizando) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         HorizontalDivider(color = Color(0xFF007AFF), thickness = 2.dp, modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
                     }
@@ -117,117 +121,119 @@ fun AIScreen(viewModel: MainViewModel) {
 
         Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(modifier = Modifier.height(32.dp))
-            DistanceBadge(distanceStatus)
+            EtiquetaDistancia(estadoDistancia)
             Spacer(modifier = Modifier.weight(1f))
 
-            if (resultText != null) {
-                ResultPanel(resultText!!, onDismiss = { resultText = null })
+            if (textoResultado != null) {
+                PanelResultado(textoResultado!!, alCerrar = { textoResultado = null })
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            ScanButton(
-                isAnalyzing = isAnalyzing, 
-                enabled = distanceStatus == "ideal" && viewModel.isCameraGranted,
-                onClick = { 
-                    isAnalyzing = true
-                    captureAndAnalyze(context, imageCapture, viewModel) { result ->
-                        resultText = result
-                        isAnalyzing = false
+            BotonEscanear(
+                estaAnalizando = analizando, 
+                habilitado = estadoDistancia == "ideal" && viewModel.isCameraGranted,
+                alClickear = { 
+                    analizando = true
+                    capturarYAnalizar(contexto, capturaImagen, viewModel) { resultado ->
+                        textoResultado = resultado
+                        analizando = false
                     }
                 }
             )
             
             if (!viewModel.isCameraGranted) {
-                Text("Habilite cámara en Ajustes", color = Color.White, fontSize = 12.sp)
+                Text("Active la cámara en Ajustes", color = Color.White, fontSize = 12.sp)
             }
             Spacer(modifier = Modifier.height(40.dp))
         }
     }
 }
 
-/**
- * Captura la foto y la envía a Roboflow
- */
-private fun captureAndAnalyze(
-    context: android.content.Context,
-    imageCapture: ImageCapture,
+private fun capturarYAnalizar(
+    contexto: android.content.Context,
+    captura: ImageCapture,
     viewModel: MainViewModel,
-    onFinish: (String) -> Unit
+    alFinalizar: (String) -> Unit
 ) {
-    imageCapture.takePicture(
-        ContextCompat.getMainExecutor(context),
+    captura.takePicture(
+        ContextCompat.getMainExecutor(contexto),
         object : ImageCapture.OnImageCapturedCallback() {
-            override fun onCaptureSuccess(image: ImageProxy) {
-                val bitmap = imageProxyToBitmap(image)
-                val base64 = bitmapToBase64(bitmap)
-                viewModel.analyzePlantImage(base64) { result ->
-                    onFinish(result)
+            override fun onCaptureSuccess(imagen: ImageProxy) {
+                val bitmap = proxyABitmap(imagen)
+                val base64 = bitmapABase64(bitmap)
+                viewModel.analyzePlantImage(base64) { resultado ->
+                    alFinalizar(resultado)
                 }
-                image.close()
+                imagen.close()
             }
 
-            override fun onError(exception: ImageCaptureException) {
-                Log.e("AIScreen", "Error captura", exception)
-                onFinish("Error al capturar la imagen.")
+            override fun onError(error: ImageCaptureException) {
+                Log.e("AIScreen", "Error captura", error)
+                alFinalizar("Error al capturar imagen")
             }
         }
     )
 }
 
-private fun imageProxyToBitmap(image: ImageProxy): Bitmap {
+private fun proxyABitmap(image: ImageProxy): Bitmap {
     val buffer = image.planes[0].buffer
     val bytes = ByteArray(buffer.remaining())
     buffer.get(bytes)
     return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
 }
 
-private fun bitmapToBase64(bitmap: Bitmap): String {
-    val outputStream = ByteArrayOutputStream()
-    bitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
-    return Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
+private fun bitmapABase64(bitmap: Bitmap): String {
+    val stream = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.JPEG, 70, stream)
+    return Base64.encodeToString(stream.toByteArray(), Base64.DEFAULT)
 }
 
 @Composable
-fun DistanceBadge(status: String) {
-    val (text, color) = when(status) {
-        "ideal" -> "¡Perfecto!" to Color(0xFF2ECC71)
-        "cerca" -> "Demasiado Cerca" to Color(0xFFFFB300)
-        else -> "Acérquese más" to Color(0xFFE57373)
+fun EtiquetaDistancia(estado: String) {
+    val texto = when(estado) {
+        "ideal" -> "¡Perfecto!"
+        "cerca" -> "Demasiado Cerca"
+        else -> "Acérquese más"
+    }
+    val color = when(estado) {
+        "ideal" -> Color(0xFF2ECC71)
+        "cerca" -> Color(0xFFFFB300)
+        else -> Color(0xFFE57373)
     }
     Surface(shape = RoundedCornerShape(24.dp), color = color) {
-        Text(text, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), color = Color.White, fontWeight = FontWeight.Bold)
+        Text(texto, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = Color.White, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
-fun ResultPanel(result: String, onDismiss: () -> Unit) {
+fun PanelResultado(resultado: String, alCerrar: () -> Unit) {
     Surface(shape = RoundedCornerShape(28.dp), color = Color.White, modifier = Modifier.fillMaxWidth(), shadowElevation = 8.dp) {
         Column(modifier = Modifier.padding(24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF007AFF))
+                Icon(Icons.Default.AutoAwesome, null, tint = Color(0xFF007AFF))
                 Spacer(modifier = Modifier.width(12.dp))
                 Text("Detección IA", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.Black)
                 Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
+                IconButton(onClick = alCerrar) { Icon(Icons.Default.Close, null) }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Text(result, color = Color.DarkGray)
+            Text(resultado, color = Color.DarkGray)
         }
     }
 }
 
 @Composable
-fun ScanButton(isAnalyzing: Boolean, enabled: Boolean, onClick: () -> Unit) {
+fun BotonEscanear(estaAnalizando: Boolean, habilitado: Boolean, alClickear: () -> Unit) {
     Button(
-        onClick = onClick,
-        enabled = enabled && !isAnalyzing,
+        onClick = alClickear,
+        enabled = habilitado && !estaAnalizando,
         modifier = Modifier.size(80.dp),
         shape = CircleShape,
-        colors = ButtonDefaults.buttonColors(containerColor = if (enabled) Color(0xFF007AFF) else Color.Gray.copy(alpha = 0.5f)),
+        colors = ButtonDefaults.buttonColors(containerColor = if (habilitado) Color(0xFF007AFF) else Color.Gray.copy(alpha = 0.5f)),
         contentPadding = PaddingValues(0.dp)
     ) {
-        if (isAnalyzing) CircularProgressIndicator(color = Color.White)
+        if (estaAnalizando) CircularProgressIndicator(color = Color.White)
         else Icon(Icons.Default.Camera, null, modifier = Modifier.size(36.dp))
     }
 }

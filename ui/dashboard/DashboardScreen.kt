@@ -142,6 +142,7 @@ fun MainDashboardContent(
 ) {
     val nextHarvestZone = zones.filter { it.daysToHarvest <= 30 }.minByOrNull { it.daysToHarvest }
     val totalHectares = zones.sumOf { it.hectares }.toInt()
+    var isWeatherExpanded by remember { mutableStateOf(false) }
 
     val weatherData = remember(locationEnabled, cityName, realWeather) {
         realWeather ?: if (locationEnabled) {
@@ -156,7 +157,12 @@ fun MainDashboardContent(
         Text(text = "Monitoreo de Cultivos", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
         Text(text = "$totalHectares hectáreas en monitoreo activo", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.height(24.dp))
-        WeatherCard(weatherData)
+        
+        WeatherCard(
+            data = weatherData, 
+            expanded = isWeatherExpanded, 
+            onToggle = { isWeatherExpanded = !isWeatherExpanded }
+        )
 
         if (!locationEnabled) {
             Spacer(modifier = Modifier.height(12.dp))
@@ -177,7 +183,9 @@ fun MainDashboardContent(
                     Icon(Icons.Default.AddCircle, contentDescription = "Agregar Zona", tint = Color(0xFF007AFF), modifier = Modifier.size(28.dp))
                 }
             }
-            Text(text = "Actualizado ahora", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            IconButton(onClick = { /* Lógica de refrescar */ }) {
+                Icon(Icons.Default.Sync, contentDescription = "Sincronizar", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            }
         }
         Spacer(modifier = Modifier.height(16.dp))
         ZoneGrid(zones, onZoneClick, onEditZone, onDeleteZone)
@@ -407,24 +415,36 @@ fun InfoBox(label: String, value: String, accentColor: Color) {
 }
 
 @Composable
-fun WeatherCard(data: WeatherData) {
+fun WeatherCard(data: WeatherData, expanded: Boolean, onToggle: () -> Unit) {
     val currentDate = remember { SimpleDateFormat("dd MMMM yyyy", Locale.forLanguageTag("es-PE")).format(Date()) }
-    Surface(shape = RoundedCornerShape(28.dp), color = Color(0xFF007AFF), contentColor = Color.White, modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        shape = RoundedCornerShape(28.dp), 
+        color = Color(0xFF007AFF), 
+        contentColor = Color.White, 
+        modifier = Modifier.fillMaxWidth().clickable { onToggle() }
+    ) {
         Column(modifier = Modifier.padding(24.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
                     Text(text = "Condiciones Actuales", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
                     Text(text = "${data.location} - $currentDate", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
                 }
-                Icon(Icons.Default.Thermostat, contentDescription = null, modifier = Modifier.size(28.dp))
+                Icon(
+                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, 
+                    contentDescription = null, 
+                    modifier = Modifier.size(24.dp)
+                )
             }
-            Spacer(modifier = Modifier.height(24.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                WeatherInfoItem(Icons.Default.DeviceThermostat, data.temp)
-                WeatherInfoItem(Icons.Default.WaterDrop, data.humidity)
-                WeatherInfoItem(Icons.Default.Air, data.wind)
-                WeatherInfoItem(Icons.Default.WbSunny, data.uv)
-                WeatherInfoItem(Icons.Default.CloudQueue, data.rain)
+            
+            if (expanded) {
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    WeatherInfoItem(Icons.Default.DeviceThermostat, data.temp)
+                    WeatherInfoItem(Icons.Default.WaterDrop, data.humidity)
+                    WeatherInfoItem(Icons.Default.Air, data.wind)
+                    WeatherInfoItem(Icons.Default.WbSunny, data.uv)
+                    WeatherInfoItem(Icons.Default.CloudQueue, data.rain)
+                }
             }
         }
     }

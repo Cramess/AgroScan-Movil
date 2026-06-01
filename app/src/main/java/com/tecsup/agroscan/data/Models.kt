@@ -5,7 +5,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.google.android.gms.maps.model.LatLng
 
 /**
- * 1) Modelo de Usuario (Para Login JWT y Roles)
+ * Modelo de Usuario (Para Autenticación JWT y Roles).
  */
 data class User(
     val id: Int,
@@ -14,11 +14,11 @@ data class User(
     val email: String,
     val rol: String, // ej. "ADMIN", "OPERADOR"
     val activo: Boolean,
-    val token: String? = null // JWT Token
+    val token: String? = null
 )
 
 /**
- * 2) Modelo de Campos (Ubicación y Hectáreas)
+ * Modelo de Campos Agrícolas.
  */
 data class Field(
     val id: Int,
@@ -31,7 +31,7 @@ data class Field(
 )
 
 /**
- * 3) Modelo de Cultivos (Asociados a un Campo)
+ * Modelo de Cultivos.
  */
 data class Crop(
     val id: Int,
@@ -39,12 +39,12 @@ data class Crop(
     val nombre: String,
     val variedad: String,
     val fechaSiembra: String,
-    val estado: String, // ej. "Saludable", "Enfermo"
+    val estado: String,
     val color: Color = Color(0xFF2ECC71)
 )
 
 /**
- * 4) Modelo de Registros de Clima (Historial y Alertas)
+ * Registro histórico de Clima.
  */
 data class WeatherRecord(
     val id: Int,
@@ -60,7 +60,9 @@ data class WeatherRecord(
     val fecha: String
 )
 
-// Modelos auxiliares para la UI
+/**
+ * Resultado de un Análisis realizado por la IA.
+ */
 data class AnalysisResult(
     val title: String,
     val plantName: String,
@@ -68,10 +70,16 @@ data class AnalysisResult(
     val icon: ImageVector,
     val color: Color,
     val date: String = "",
+    val time: String = "",
+    val location: String = "",
+    val temperature: String = "",
+    val humidity: String = "",
     val summary: String = ""
 )
 
-// Mantengo ZoneInfo por compatibilidad con el código actual, pero mapeado a Crop/Field
+/**
+ * Información de una Zona para visualización en el mapa y UI.
+ */
 data class ZoneInfo(
     val name: String, 
     val crop: String, 
@@ -85,6 +93,9 @@ data class ZoneInfo(
     val photoUri: String? = null
 )
 
+/**
+ * Datos de Clima para la tarjeta principal.
+ */
 data class WeatherData(
     val location: String, 
     val temp: String, 

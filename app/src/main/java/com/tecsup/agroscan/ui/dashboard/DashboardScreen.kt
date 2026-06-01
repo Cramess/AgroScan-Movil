@@ -21,17 +21,28 @@ import androidx.compose.ui.unit.sp
 import com.tecsup.agroscan.ui.settings.SettingsScreen
 import com.tecsup.agroscan.ui.search.SearchScreen
 import com.tecsup.agroscan.ui.ia.AIScreen
+import com.tecsup.agroscan.ui.profile.ProfileScreen
 import com.tecsup.agroscan.viewmodel.MainViewModel
 import com.tecsup.agroscan.data.ZoneInfo
 import com.tecsup.agroscan.data.WeatherData
-import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.*
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polygon
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.util.*
 
 import androidx.compose.ui.graphics.Brush
 
+/**
+ * Pantalla Principal del Panel de Control (Dashboard).
+ * Gestiona la navegación y muestra el contenido principal.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
@@ -39,46 +50,47 @@ fun DashboardScreen(
     onLocationRequest: () -> Unit = {},
     onCameraRequest: () -> Unit = {}
 ) {
-    var selectedItem by remember { mutableIntStateOf(0) }
-    var selectedZone by remember { mutableStateOf<ZoneInfo?>(null) }
-    var showDetailSheet by remember { mutableStateOf(false) }
-    var showAddSheet by remember { mutableStateOf(false) }
-    val detailSheetState = rememberModalBottomSheetState()
-    val addSheetState = rememberModalBottomSheetState()
+    var itemSeleccionado by remember { mutableIntStateOf(0) }
+    var zonaSeleccionada by remember { mutableStateOf<ZoneInfo?>(null) }
+    var mostrarHojaDetalle by remember { mutableStateOf(false) }
+    var mostrarHojaAgregar by remember { mutableStateOf(false) }
+    var mostrarHojaEditar by remember { mutableStateOf(false) }
+    val estadoHojaDetalle = rememberModalBottomSheetState()
+    val estadoHojaAgregar = rememberModalBottomSheetState()
+    val estadoHojaEditar = rememberModalBottomSheetState()
 
-    val bgColor = MaterialTheme.colorScheme.background
+    val colorFondo = MaterialTheme.colorScheme.background
 
-    Box(modifier = Modifier.fillMaxSize().background(bgColor)) {
+    Box(modifier = Modifier.fillMaxSize().background(colorFondo)) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
-                when (selectedItem) {
-                    0 -> MainDashboardContent(
+                when (itemSeleccionado) {
+                    0 -> ContenidoPrincipalDashboard(
                         locationEnabled = viewModel.isLocationGranted,
                         cityName = viewModel.userCity,
                         zones = viewModel.zones,
                         realWeather = viewModel.realWeatherData,
                         onZoneClick = {
-                            selectedZone = it
-                            showDetailSheet = true
+                            zonaSeleccionada = it
+                            mostrarHojaDetalle = true
                         },
-                        onAddClick = { showAddSheet = true },
-                        onEditZone = { /* Logica de editar */ },
+                        onAddClick = { mostrarHojaAgregar = true },
+                        onEditZone = {
+                            zonaSeleccionada = it
+                            mostrarHojaEditar = true
+                        },
                         onDeleteZone = { viewModel.removeZone(it) }
                     )
                     1 -> AIScreen(viewModel = viewModel)
                     2 -> SearchScreen(viewModel = viewModel)
-                    3 -> SettingsScreen(
-                        viewModel = viewModel,
-                        onLocationToggle = onLocationRequest,
-                        onCameraToggle = onCameraRequest
-                    )
+                    3 -> ProfileScreen(viewModel = viewModel)
                 }
             }
         }
 
         // --- DEGRADADOS ---
-        Box(modifier = Modifier.fillMaxWidth().height(80.dp).background(Brush.verticalGradient(colors = listOf(bgColor, Color.Transparent))).align(Alignment.TopCenter))
-        Box(modifier = Modifier.fillMaxWidth().height(180.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(colors = listOf(Color.Transparent, bgColor.copy(alpha = 0.5f), bgColor))))
+        Box(modifier = Modifier.fillMaxWidth().height(80.dp).background(Brush.verticalGradient(colors = listOf(colorFondo, Color.Transparent))).align(Alignment.TopCenter))
+        Box(modifier = Modifier.fillMaxWidth().height(180.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(colors = listOf(Color.Transparent, colorFondo.copy(alpha = 0.5f), colorFondo))))
 
         // --- BARRA DE NAVEGACIÓN ---
         Surface(
@@ -88,49 +100,66 @@ fun DashboardScreen(
             shadowElevation = 10.dp
         ) {
             Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
-                val navItems = listOf("Inicio", "IA", "Buscar", "Ajustes")
-                val icons = listOf(Icons.Default.Home, Icons.Default.AutoAwesome, Icons.Default.Search, Icons.Default.Settings)
-                navItems.forEachIndexed { index, item ->
-                    val isSelected = selectedItem == index
-                    Column(modifier = Modifier.weight(1f).clickable { selectedItem = index }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Icon(imageVector = icons[index], contentDescription = item, tint = if (isSelected) Color(0xFF007AFF) else Color(0xFF8E9196), modifier = Modifier.size(if (isSelected) 28.dp else 24.dp))
+                val itemsNav = listOf("Inicio", "IA", "Buscar", "Perfil")
+                val iconos = listOf(Icons.Default.Home, Icons.Default.AutoAwesome, Icons.Default.Search, Icons.Default.Person)
+                itemsNav.forEachIndexed { index, item ->
+                    val estaSeleccionado = itemSeleccionado == index
+                    Column(modifier = Modifier.weight(1f).clickable { itemSeleccionado = index }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Icon(imageVector = iconos[index], contentDescription = item, tint = if (estaSeleccionado) Color(0xFF007AFF) else Color(0xFF8E9196), modifier = Modifier.size(if (estaSeleccionado) 28.dp else 24.dp))
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = item, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, color = if (isSelected) Color(0xFF007AFF) else Color(0xFF8E9196))
+                        Text(text = item, fontSize = 11.sp, fontWeight = if (estaSeleccionado) FontWeight.Bold else FontWeight.Medium, color = if (estaSeleccionado) Color(0xFF007AFF) else Color(0xFF8E9196))
                     }
                 }
             }
         }
 
-        // --- BOTTOM SHEETS ---
-        if (showDetailSheet && selectedZone != null) {
+        // --- HOJAS INFERIORES (BOTTOM SHEETS) ---
+        if (mostrarHojaDetalle && zonaSeleccionada != null) {
             ModalBottomSheet(
-                onDismissRequest = { showDetailSheet = false },
-                sheetState = detailSheetState,
+                onDismissRequest = { mostrarHojaDetalle = false },
+                sheetState = estadoHojaDetalle,
                 containerColor = Color.White,
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
             ) {
-                ZoneDetailContent(selectedZone!!)
+                ContenidoDetalleZona(zonaSeleccionada!!)
             }
         }
 
-        if (showAddSheet) {
+        if (mostrarHojaAgregar) {
             ModalBottomSheet(
-                onDismissRequest = { showAddSheet = false },
-                sheetState = addSheetState,
+                onDismissRequest = { mostrarHojaAgregar = false },
+                sheetState = estadoHojaAgregar,
                 containerColor = Color.White,
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
             ) {
-                AddZoneForm(onAdd = { newZone ->
-                    viewModel.addZone(newZone)
-                    showAddSheet = false
+                FormularioAgregarZona(onAdd = { nuevaZona ->
+                    viewModel.addZone(nuevaZona)
+                    mostrarHojaAgregar = false
                 })
+            }
+        }
+
+        if (mostrarHojaEditar && zonaSeleccionada != null) {
+            ModalBottomSheet(
+                onDismissRequest = { mostrarHojaEditar = false },
+                sheetState = estadoHojaEditar,
+                containerColor = Color.White,
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+            ) {
+                FormularioEditarZona(
+                    zona = zonaSeleccionada!!,
+                    onUpdate = { zonaActualizada ->
+                        viewModel.updateZone(zonaSeleccionada!!, zonaActualizada)
+                        mostrarHojaEditar = false
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-fun MainDashboardContent(
+fun ContenidoPrincipalDashboard(
     locationEnabled: Boolean,
     cityName: String,
     zones: List<ZoneInfo>,
@@ -140,10 +169,10 @@ fun MainDashboardContent(
     onEditZone: (ZoneInfo) -> Unit,
     onDeleteZone: (ZoneInfo) -> Unit
 ) {
-    val nextHarvestZone = zones.filter { it.daysToHarvest <= 30 }.minByOrNull { it.daysToHarvest }
-    val totalHectares = zones.sumOf { it.hectares }.toInt()
+    val proximaZonaCosecha = zones.filter { it.daysToHarvest <= 30 }.minByOrNull { it.daysToHarvest }
+    val totalHectareas = zones.sumOf { it.hectares }.toInt()
 
-    val weatherData = remember(locationEnabled, cityName, realWeather) {
+    val datosClima = remember(locationEnabled, cityName, realWeather) {
         realWeather ?: if (locationEnabled) {
             WeatherData(location = cityName, temp = "26°C", humidity = "62%", wind = "14km/h", uv = "UV 7", rain = "0.0mm")
         } else {
@@ -154,18 +183,18 @@ fun MainDashboardContent(
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
         Spacer(modifier = Modifier.height(32.dp))
         Text(text = "Monitoreo de Cultivos", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-        Text(text = "$totalHectares hectáreas en monitoreo activo", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text = "$totalHectareas hectáreas en monitoreo activo", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.height(24.dp))
-        WeatherCard(weatherData)
+        TarjetaClima(datosClima)
 
         if (!locationEnabled) {
             Spacer(modifier = Modifier.height(12.dp))
-            AlertCard(title = "Ubicación requerida", subtitle = "Activa GPS para datos locales", icon = Icons.Default.LocationOff, containerColor = Color(0xFFFDE8E8), contentColor = Color(0xFFC81E1E))
+            TarjetaAlerta(title = "Ubicación requerida", subtitle = "Activa GPS para datos locales", icon = Icons.Default.LocationOff, containerColor = Color(0xFFFDE8E8), contentColor = Color(0xFFC81E1E))
         }
 
-        nextHarvestZone?.let { zone ->
+        proximaZonaCosecha?.let { zona ->
             Spacer(modifier = Modifier.height(16.dp))
-            AlertCard(title = "Cosecha Óptima Próxima", subtitle = "${zone.name} lista en ${zone.daysToHarvest} días", icon = Icons.Default.WarningAmber, containerColor = Color(0xFFFFF4E5), contentColor = Color(0xFF855300))
+            TarjetaAlerta(title = "Cosecha Óptima Próxima", subtitle = "${zona.name} lista en ${zona.daysToHarvest} días", icon = Icons.Default.WarningAmber, containerColor = Color(0xFFFFF4E5), contentColor = Color(0xFF855300))
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -180,43 +209,43 @@ fun MainDashboardContent(
             Text(text = "Actualizado ahora", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(modifier = Modifier.height(16.dp))
-        ZoneGrid(zones, onZoneClick, onEditZone, onDeleteZone)
+        CuadriculaZonas(zones, onZoneClick, onEditZone, onDeleteZone)
         
-        // --- FIX SCROLL: Espacio extra para que el dock no tape el contenido ---
+        // --- ESPACIO EXTRA PARA EL SCROLL ---
         Spacer(modifier = Modifier.height(140.dp))
     }
 }
 
 @Composable
-fun AddZoneForm(onAdd: (ZoneInfo) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var crop by remember { mutableStateOf("") }
-    var days by remember { mutableStateOf("") }
-    var hectares by remember { mutableStateOf("") }
-    var plantingDate by remember { mutableStateOf("") }
-    var observations by remember { mutableStateOf("") }
-    var capturedPhoto by remember { mutableStateOf<String?>(null) }
+fun FormularioAgregarZona(onAdd: (ZoneInfo) -> Unit) {
+    var nombre by remember { mutableStateOf("") }
+    var cultivo by remember { mutableStateOf("") }
+    var dias by remember { mutableStateOf("") }
+    var hectareas by remember { mutableStateOf("") }
+    var fechaSiembra by remember { mutableStateOf("") }
+    var observaciones by remember { mutableStateOf("") }
+    var fotoCapturada by remember { mutableStateOf<String?>(null) }
 
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState())) {
         Text("Nueva Zona de Cultivo", fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(20.dp))
         
-        OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre de la zona") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+        OutlinedTextField(value = nombre, onValueChange = { nombre = it }, label = { Text("Nombre de la zona") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
         Spacer(modifier = Modifier.height(12.dp))
         
-        OutlinedTextField(value = crop, onValueChange = { crop = it }, label = { Text("Tipo de Cultivo") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+        OutlinedTextField(value = cultivo, onValueChange = { cultivo = it }, label = { Text("Tipo de Cultivo") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
         Spacer(modifier = Modifier.height(12.dp))
         
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(value = hectares, onValueChange = { hectares = it }, label = { Text("Hectáreas") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp))
-            OutlinedTextField(value = plantingDate, onValueChange = { plantingDate = it }, label = { Text("F. Siembra") }, placeholder = { Text("dd/mm/aaaa") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp))
+            OutlinedTextField(value = hectareas, onValueChange = { hectareas = it }, label = { Text("Hectáreas") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp))
+            OutlinedTextField(value = fechaSiembra, onValueChange = { fechaSiembra = it }, label = { Text("F. Siembra") }, placeholder = { Text("dd/mm/aaaa") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp))
         }
         Spacer(modifier = Modifier.height(12.dp))
         
-        OutlinedTextField(value = days, onValueChange = { days = it }, label = { Text("Días cosecha") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+        OutlinedTextField(value = dias, onValueChange = { dias = it }, label = { Text("Días cosecha") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
         Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedTextField(value = observations, onValueChange = { observations = it }, label = { Text("Observaciones") }, modifier = Modifier.fillMaxWidth().height(100.dp), shape = RoundedCornerShape(16.dp))
+        OutlinedTextField(value = observaciones, onValueChange = { observaciones = it }, label = { Text("Observaciones") }, modifier = Modifier.fillMaxWidth().height(100.dp), shape = RoundedCornerShape(16.dp))
         Spacer(modifier = Modifier.height(16.dp))
 
         // Sección de Fotografía e IA
@@ -224,13 +253,13 @@ fun AddZoneForm(onAdd: (ZoneInfo) -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         
         Surface(
-            modifier = Modifier.fillMaxWidth().height(120.dp).clickable { capturedPhoto = "simulated_uri" },
+            modifier = Modifier.fillMaxWidth().height(120.dp).clickable { fotoCapturada = "simulated_uri" },
             shape = RoundedCornerShape(16.dp),
             color = Color(0xFFF2F4F7),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                if (capturedPhoto == null) {
+                if (fotoCapturada == null) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.AddAPhoto, contentDescription = null, tint = Color.Gray)
                         Text("Tomar foto para análisis", fontSize = 12.sp, color = Color.Gray)
@@ -249,18 +278,18 @@ fun AddZoneForm(onAdd: (ZoneInfo) -> Unit) {
         
         Button(
             onClick = {
-                if (name.isNotBlank() && crop.isNotBlank()) {
+                if (nombre.isNotBlank() && cultivo.isNotBlank()) {
                     onAdd(ZoneInfo(
-                        name = name, 
-                        crop = crop, 
+                        name = nombre, 
+                        crop = cultivo, 
                         color = Color(0xFF007AFF), 
-                        daysToHarvest = days.toIntOrNull() ?: 30, 
+                        daysToHarvest = dias.toIntOrNull() ?: 30, 
                         location = LatLng(-14.0, -75.7),
-                        hectares = hectares.toDoubleOrNull() ?: 0.0,
-                        plantingDate = plantingDate,
-                        observations = observations,
-                        cropStatus = if (capturedPhoto != null) "Analizado (IA)" else "Pendiente",
-                        photoUri = capturedPhoto
+                        hectares = hectareas.toDoubleOrNull() ?: 0.0,
+                        plantingDate = fechaSiembra,
+                        observations = observaciones,
+                        cropStatus = if (fotoCapturada != null) "Analizado (IA)" else "Pendiente",
+                        photoUri = fotoCapturada
                     ))
                 }
             },
@@ -274,13 +303,13 @@ fun AddZoneForm(onAdd: (ZoneInfo) -> Unit) {
 }
 
 @Composable
-fun ZoneGrid(zones: List<ZoneInfo>, onZoneClick: (ZoneInfo) -> Unit, onEdit: (ZoneInfo) -> Unit, onDelete: (ZoneInfo) -> Unit) {
+fun CuadriculaZonas(zones: List<ZoneInfo>, onZoneClick: (ZoneInfo) -> Unit, onEdit: (ZoneInfo) -> Unit, onDelete: (ZoneInfo) -> Unit) {
     Column {
         zones.chunked(2).forEach { pair ->
             Row(modifier = Modifier.fillMaxWidth()) {
-                pair.forEach { zone ->
+                pair.forEach { zona ->
                     Box(modifier = Modifier.weight(1f)) {
-                        ZoneCard(zone, onClick = { onZoneClick(zone) }, onEdit = { onEdit(zone) }, onDelete = { onDelete(zone) })
+                        TarjetaZona(zona, onClick = { onZoneClick(zona) }, onEdit = { onEdit(zona) }, onDelete = { onDelete(zona) })
                     }
                 }
                 if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
@@ -291,80 +320,80 @@ fun ZoneGrid(zones: List<ZoneInfo>, onZoneClick: (ZoneInfo) -> Unit, onEdit: (Zo
 }
 
 @Composable
-fun ZoneCard(zone: ZoneInfo, onClick: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
+fun TarjetaZona(zona: ZoneInfo, onClick: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(28.dp), 
         color = Color.White, 
         modifier = Modifier
             .padding(6.dp)
             .fillMaxWidth()
-            .height(160.dp)
+            .height(200.dp) // Aumentado para evitar colisiones
             .clickable { onClick() }, 
         shadowElevation = 2.dp
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // --- BOTONES DE ACCIÓN (Top Right corregidos) ---
+            // --- BOTONES DE ACCIÓN (Corregidos y Separados) ---
             Row(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
+                    .fillMaxWidth()
                     .padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Surface(
                     shape = CircleShape,
                     color = Color(0xFFF2F4F7),
-                    modifier = Modifier.size(32.dp).clickable { onEdit() }
+                    modifier = Modifier.size(36.dp).clickable { onEdit() }
                 ) {
                     Icon(
                         Icons.Default.Edit, 
                         contentDescription = "Editar", 
                         tint = Color.Gray, 
-                        modifier = Modifier.padding(8.dp)
+                        modifier = Modifier.padding(8.dp).size(20.dp)
                     )
                 }
                 Surface(
                     shape = CircleShape,
                     color = Color(0xFFFFEBEE),
-                    modifier = Modifier.size(32.dp).clickable { onDelete() }
+                    modifier = Modifier.size(36.dp).clickable { onDelete() }
                 ) {
                     Icon(
                         Icons.Default.Delete, 
                         contentDescription = "Eliminar", 
                         tint = Color(0xFFE57373), 
-                        modifier = Modifier.padding(8.dp)
+                        modifier = Modifier.padding(8.dp).size(20.dp)
                     )
                 }
             }
 
-            // --- CONTENIDO CENTRAL ---
+            // --- CONTENIDO CENTRAL (Bajado para evitar overlap) ---
             Column(
-                modifier = Modifier.fillMaxSize().padding(top = 20.dp),
+                modifier = Modifier.fillMaxSize().padding(top = 40.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
                 Surface(
                     shape = CircleShape, 
-                    color = zone.color.copy(alpha = 0.15f), 
-                    modifier = Modifier.size(52.dp)
+                    color = zona.color.copy(alpha = 0.15f), 
+                    modifier = Modifier.size(56.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) { 
                         Icon(
                             Icons.Default.LocationOn, 
                             contentDescription = null, 
-                            tint = zone.color,
+                            tint = zona.color,
                             modifier = Modifier.size(28.dp)
                         ) 
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = zone.name, 
+                    text = zona.name, 
                     fontWeight = FontWeight.ExtraBold, 
                     fontSize = 16.sp, 
                     color = Color(0xFF1A1C1E)
                 )
                 Text(
-                    text = zone.crop, 
+                    text = zona.crop, 
                     fontSize = 13.sp, 
                     color = Color(0xFF8E9196)
                 )
@@ -374,41 +403,121 @@ fun ZoneCard(zone: ZoneInfo, onClick: () -> Unit, onEdit: () -> Unit, onDelete: 
 }
 
 @Composable
-fun ZoneDetailContent(zone: ZoneInfo) {
-    val cameraPositionState = rememberCameraPositionState { 
-        position = CameraPosition.fromLatLngZoom(zone.location, 16f) 
-    }
-
-    // Forzar que el mapa se mueva a la ubicación de la zona seleccionada
-    LaunchedEffect(zone.location) {
-        cameraPositionState.position = CameraPosition.fromLatLngZoom(zone.location, 16f)
-    }
+fun FormularioEditarZona(zona: ZoneInfo, onUpdate: (ZoneInfo) -> Unit) {
+    var nombre by remember { mutableStateOf(zona.name) }
+    var cultivo by remember { mutableStateOf(zona.crop) }
+    var dias by remember { mutableStateOf(zona.daysToHarvest.toString()) }
+    var hectareas by remember { mutableStateOf(zona.hectares.toString()) }
+    var fechaSiembra by remember { mutableStateOf(zona.plantingDate) }
+    var observaciones by remember { mutableStateOf(zona.observations) }
 
     Column(modifier = Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState())) {
-        Text(text = "Detalles de ${zone.name}", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-        Text(text = "Cultivo: ${zone.crop}", fontSize = 16.sp, color = Color.Gray)
+        Text("Editar Zona", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(20.dp))
+        
+        OutlinedTextField(value = nombre, onValueChange = { nombre = it }, label = { Text("Nombre de la zona") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        OutlinedTextField(value = cultivo, onValueChange = { cultivo = it }, label = { Text("Tipo de Cultivo") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(value = hectareas, onValueChange = { hectareas = it }, label = { Text("Hectáreas") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp))
+            OutlinedTextField(value = fechaSiembra, onValueChange = { fechaSiembra = it }, label = { Text("F. Siembra") }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp))
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        OutlinedTextField(value = dias, onValueChange = { dias = it }, label = { Text("Días cosecha") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedTextField(value = observaciones, onValueChange = { observaciones = it }, label = { Text("Observaciones") }, modifier = Modifier.fillMaxWidth().height(100.dp), shape = RoundedCornerShape(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Button(
+            onClick = {
+                onUpdate(zona.copy(
+                    name = nombre,
+                    crop = cultivo,
+                    daysToHarvest = dias.toIntOrNull() ?: zona.daysToHarvest,
+                    hectares = hectareas.toDoubleOrNull() ?: zona.hectares,
+                    plantingDate = fechaSiembra,
+                    observations = observaciones
+                ))
+            },
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(28.dp)
+        ) {
+            Text("Actualizar Zona", fontWeight = FontWeight.Bold)
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+@Composable
+fun ContenidoDetalleZona(zona: ZoneInfo) {
+    val contexto = LocalContext.current
+    
+    // Configuración obligatoria para OSMDroid
+    Configuration.getInstance().userAgentValue = contexto.packageName
+
+    Column(modifier = Modifier.fillMaxWidth().padding(24.dp).verticalScroll(rememberScrollState())) {
+        Text(text = "Detalles de ${zona.name}", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        Text(text = "Cultivo: ${zona.crop}", fontSize = 16.sp, color = Color.Gray)
         Spacer(modifier = Modifier.height(24.dp))
         
         Surface(modifier = Modifier.fillMaxWidth().height(220.dp), shape = RoundedCornerShape(24.dp), color = Color.LightGray) {
-            GoogleMap(modifier = Modifier.fillMaxSize(), cameraPositionState = cameraPositionState, uiSettings = MapUiSettings(zoomControlsEnabled = false)) {
-                Marker(state = MarkerState(position = zone.location), title = zone.name)
-                // El radio del círculo ahora es dinámico según las hectáreas registradas
-                Circle(
-                    center = zone.location,
-                    radius = (zone.hectares * 10.0).coerceAtLeast(50.0), // Escala: 1ha = 10m de radio (mínimo 50m)
-                    fillColor = zone.color.copy(alpha = 0.3f),
-                    strokeColor = zone.color,
-                    strokeWidth = 2f
-                )
-            }
+            AndroidView(
+                factory = { ctx ->
+                    MapView(ctx).apply {
+                        setTileSource(TileSourceFactory.MAPNIK)
+                        setMultiTouchControls(true)
+                        controller.setZoom(16.0)
+                        val puntoInicio = GeoPoint(zona.location.latitude, zona.location.longitude)
+                        controller.setCenter(puntoInicio)
+                        
+                        // Marcador
+                        val marcador = Marker(this)
+                        marcador.position = puntoInicio
+                        marcador.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        marcador.title = zona.name
+                        overlays.add(marcador)
+
+                        // Simular círculo (zona de cultivo)
+                        val puntosCirculo = ArrayList<GeoPoint>()
+                        val radio = (zona.hectares * 10.0).coerceAtLeast(50.0)
+                        for (i in 0 until 360) {
+                            puntosCirculo.add(GeoPoint(puntoInicio).destinationPoint(radio, i.toDouble()))
+                        }
+                        val circulo = Polygon(this)
+                        circulo.points = puntosCirculo
+                        circulo.fillPaint.color = android.graphics.Color.argb(77, 
+                            (zona.color.red * 255).toInt(), 
+                            (zona.color.green * 255).toInt(), 
+                            (zona.color.blue * 255).toInt())
+                        circulo.outlinePaint.color = android.graphics.Color.rgb(
+                            (zona.color.red * 255).toInt(), 
+                            (zona.color.green * 255).toInt(), 
+                            (zona.color.blue * 255).toInt())
+                        circulo.outlinePaint.strokeWidth = 2f
+                        overlays.add(circulo)
+                        
+                        invalidate()
+                    }
+                },
+                update = { mapView ->
+                    val puntoInicio = GeoPoint(zona.location.latitude, zona.location.longitude)
+                    mapView.controller.setCenter(puntoInicio)
+                },
+                modifier = Modifier.fillMaxSize()
+            )
         }
         Spacer(modifier = Modifier.height(24.dp))
         
         // Info de cosecha y hectáreas
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            InfoBox("Hectáreas", "${zone.hectares} ha", Color(0xFF007AFF))
-            InfoBox("F. Siembra", zone.plantingDate.ifEmpty { "--" }, Color(0xFF8E9196))
-            InfoBox("Días restantes", "${zone.daysToHarvest}", zone.color)
+            InfoBox("Hectáreas", "${zona.hectares} ha", Color(0xFF007AFF))
+            InfoBox("F. Siembra", zona.plantingDate.ifEmpty { "--" }, Color(0xFF8E9196))
+            InfoBox("Días restantes", "${zona.daysToHarvest}", zona.color)
         }
         
         Spacer(modifier = Modifier.height(24.dp))
@@ -422,12 +531,12 @@ fun ZoneDetailContent(zone: ZoneInfo) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(text = "Estado del Cultivo (IA)", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1C1E))
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(text = zone.cropStatus, fontSize = 16.sp, color = if (zone.cropStatus.contains("Saludable")) Color(0xFF2ECC71) else Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)
+                Text(text = zona.cropStatus, fontSize = 16.sp, color = if (zona.cropStatus.contains("Saludable")) Color(0xFF2ECC71) else Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)
                 
-                if (zone.observations.isNotEmpty()) {
+                if (zona.observations.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(text = "Observaciones", fontSize = 12.sp, color = Color.Gray)
-                    Text(text = zone.observations, fontSize = 14.sp, color = Color.Black)
+                    Text(text = zona.observations, fontSize = 14.sp, color = Color.Black)
                 }
             }
         }
@@ -451,31 +560,31 @@ fun InfoBox(label: String, value: String, accentColor: Color) {
 }
 
 @Composable
-fun WeatherCard(data: WeatherData) {
-    val currentDate = remember { SimpleDateFormat("dd MMMM yyyy", Locale.forLanguageTag("es-PE")).format(Date()) }
+fun TarjetaClima(data: WeatherData) {
+    val fechaActual = remember { SimpleDateFormat("dd MMMM yyyy", Locale.forLanguageTag("es-PE")).format(Date()) }
     Surface(shape = RoundedCornerShape(28.dp), color = Color(0xFF007AFF), contentColor = Color.White, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(24.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
                     Text(text = "Condiciones Actuales", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-                    Text(text = "${data.location} - $currentDate", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
+                    Text(text = "${data.location} - $fechaActual", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
                 }
                 Icon(Icons.Default.Thermostat, contentDescription = null, modifier = Modifier.size(28.dp))
             }
             Spacer(modifier = Modifier.height(24.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                WeatherInfoItem(Icons.Default.DeviceThermostat, data.temp)
-                WeatherInfoItem(Icons.Default.WaterDrop, data.humidity)
-                WeatherInfoItem(Icons.Default.Air, data.wind)
-                WeatherInfoItem(Icons.Default.WbSunny, data.uv)
-                WeatherInfoItem(Icons.Default.CloudQueue, data.rain)
+                InfoClimaItem(Icons.Default.DeviceThermostat, data.temp)
+                InfoClimaItem(Icons.Default.WaterDrop, data.humidity)
+                InfoClimaItem(Icons.Default.Air, data.wind)
+                InfoClimaItem(Icons.Default.WbSunny, data.uv)
+                InfoClimaItem(Icons.Default.CloudQueue, data.rain)
             }
         }
     }
 }
 
 @Composable
-fun WeatherInfoItem(icon: ImageVector, value: String) {
+fun InfoClimaItem(icon: ImageVector, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
         Spacer(modifier = Modifier.height(4.dp))
@@ -484,7 +593,7 @@ fun WeatherInfoItem(icon: ImageVector, value: String) {
 }
 
 @Composable
-fun AlertCard(title: String, subtitle: String, icon: ImageVector, containerColor: Color, contentColor: Color) {
+fun TarjetaAlerta(title: String, subtitle: String, icon: ImageVector, containerColor: Color, contentColor: Color) {
     Surface(shape = RoundedCornerShape(24.dp), color = containerColor, modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(28.dp))
