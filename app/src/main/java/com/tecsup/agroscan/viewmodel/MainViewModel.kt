@@ -13,8 +13,8 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.tecsup.agroscan.data.*
-import com.tecsup.agroscan.network.WeatherApiService
-import com.tecsup.agroscan.network.RoboflowApiService
+import com.tecsup.agroscan.data.Field as AgroField
+import com.tecsup.agroscan.network.*
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -23,7 +23,7 @@ import java.util.*
 
 /**
  * Cerebro de la aplicación (ViewModel).
- * Maneja la lógica de negocio, datos y sincronización.
+ * Sincroniza datos reales entre la base de datos PostgreSQL y la interfaz de usuario.
  */
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencias = application.getSharedPreferences("agroscan_prefs", Context.MODE_PRIVATE)
@@ -52,6 +52,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val weatherApiService = WeatherApiService.create()
     private val roboflowApiService = RoboflowApiService.create()
+    private var agroScanApiService: AgroScanApiService? = null
 
     init {
         cargarSesion()
@@ -62,22 +63,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
     fun login(email: String, pass: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            if (email.contains("@") && pass.length >= 4) {
-                val mockUser = User(
-                    id = 1,
-                    empresaId = 101,
-                    nombre = "Cristian Alex",
+            try {
+                val apiPublica = AgroScanApiService.create()
+                val respuesta = apiPublica.login(email, pass)
+                
+                val usuario = User(
+                    id = 0,
+                    empresaId = respuesta.empresa_id,
+                    nombre = respuesta.nombre,
                     email = email,
-                    rol = if (email.contains("admin")) "ADMIN" else "OPERADOR",
+                    rol = respuesta.rol.uppercase(),
                     activo = true,
-                    token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    token = respuesta.access_token
                 )
-                currentUser = mockUser
+                
+                currentUser = usuario
                 isLoggedIn = true
-                guardarSesion(mockUser)
-                cargarDatosIniciales()
+                agroScanApiService = AgroScanApiService.create(usuario.token)
+                
+                guardarSesion(usuario)
+                sincronizarDatosDelServidor()
                 onResult(true)
-            } else {
+            } catch (e: Exception) {
+                Log.e("VM", "Error login", e)
                 onResult(false)
             }
         }
@@ -90,44 +98,68 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun cargarSesion() {
         val json = preferencias.getString("user_session", null)
         if (json != null) {
-            currentUser = gson.fromJson(json, User::class.java)
-            isLoggedIn = true
-            cargarDatosIniciales()
+            try {
+                val usuario = gson.fromJson(json, User::class.java)
+                currentUser = usuario
+                isLoggedIn = true
+                agroScanApiService = AgroScanApiService.create(usuario.token)
+                sincronizarDatosDelServidor()
+            } catch (e: Exception) { logout() }
         }
     }
 
     fun logout() {
         currentUser = null
         isLoggedIn = false
+        agroScanApiService = null
         preferencias.edit().remove("user_session").apply()
     }
 
-    // --- PERSISTENCIA DE DATOS ---
+    // --- SINCRONIZACIÓN CON POSTGRESQL ---
 
-    private fun cargarDatosIniciales() {
-        val jsonZonas = preferencias.getString("saved_zones", null)
-        if (jsonZonas != null) {
+    fun sincronizarDatosDelServidor() {
+        viewModelScope.launch {
+            val api = agroScanApiService ?: return@launch
             try {
-                val tipo = object : TypeToken<List<ZoneInfo>>() {}.type
-                val zonasGuardadas: List<ZoneInfo> = gson.fromJson(jsonZonas, tipo)
+                // 1. Obtener campos de la BD real
+                val camposBackend = api.listarCampos()
+                
+                // 2. Mapear para la UI del mapa
                 zones.clear()
-                zones.addAll(zonasGuardadas)
+                camposBackend.forEach { campo ->
+                    zones.add(ZoneInfo(
+                        name = campo.nombre,
+                        crop = "Detectando cultivo...",
+                        color = Color(0xFF007AFF),
+                        daysToHarvest = 30,
+                        location = LatLng(campo.latitud, campo.longitud),
+                        hectares = campo.hectares, // Sincronizado con el modelo Field.hectares
+                        plantingDate = "--",
+                        cropStatus = "Activo"
+                    ))
+                }
+                
+                // 3. Cargar cultivos asociados
+                val cultivosBackend = api.listarCultivos()
+                cultivosBackend.forEach { cultivo ->
+                    val campoAsociado = camposBackend.find { it.id == cultivo.campoId }
+                    if (campoAsociado != null) {
+                        val index = zones.indexOfFirst { it.name == campoAsociado.nombre }
+                        if (index != -1) {
+                            val zonaExistente = zones[index]
+                            zones[index] = zonaExistente.copy(
+                                crop = "${cultivo.nombre} (${cultivo.variedad})",
+                                plantingDate = cultivo.fechaSiembra,
+                                cropStatus = cultivo.estado
+                            )
+                        }
+                    }
+                }
+                guardarZonasLocales()
             } catch (e: Exception) {
-                Log.e("VM", "Error cargando zonas", e)
-                cargarZonasPorDefecto()
+                Log.e("VM", "Error sync", e)
             }
-        } else {
-            cargarZonasPorDefecto()
         }
-    }
-
-    private fun cargarZonasPorDefecto() {
-        zones.clear()
-        zones.addAll(listOf(
-            ZoneInfo("Campo Norte", "Espárrago (UC157)", Color(0xFF2ECC71), 27, LatLng(-14.0678, -75.7286), 250.0, "10/02/2024", "", "Saludable"),
-            ZoneInfo("Campo Sur", "Palta (Hass)", Color(0xFFFFB300), 45, LatLng(-14.0700, -75.7300), 180.0, "15/01/2024", "", "Vigilancia")
-        ))
-        guardarZonasLocales()
     }
 
     private fun guardarZonasLocales() {
@@ -141,7 +173,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val tipo = object : TypeToken<List<AnalysisResult>>() {}.type
                 analysisHistory.clear()
                 analysisHistory.addAll(gson.fromJson(jsonHistorial, tipo))
-            } catch (e: Exception) { Log.e("VM", "Error historial", e) }
+            } catch (e: Exception) { Log.e("VM", "History error", e) }
         }
     }
 
@@ -190,9 +222,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * Traduce los resultados de la IA al español.
-     */
     private fun translateResult(englishName: String): String {
         val name = englishName.lowercase()
         return when {

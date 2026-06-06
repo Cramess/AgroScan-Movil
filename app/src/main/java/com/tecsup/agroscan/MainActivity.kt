@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
                             Box(modifier = Modifier.padding(innerPadding)) {
                                 LoginScreen(
                                     viewModel = viewModel,
-                                    onLoginSuccess = { estadoNavegacion = "dashboard" }
+                                    alTenerExito = { estadoNavegacion = "dashboard" }
                                 )
                             }
                         } else {
@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-        } catch (e: SecurityException) {
+        } catch (_: SecurityException) {
             viewModel.userCity = "Error GPS"
         }
     }

@@ -44,8 +44,15 @@ fun AIScreen(viewModel: MainViewModel) {
     var analizando by remember { mutableStateOf(false) }
     var textoResultado by remember { mutableStateOf<String?>(null) }
     var estadoDistancia by remember { mutableStateOf("ideal") }
+    var flashlightEnabled by remember { mutableStateOf(false) }
+    var camera by remember { mutableStateOf<Camera?>(null) }
     
     val capturaImagen = remember { ImageCapture.Builder().build() }
+
+    // Controlar linterna cuando cambia el estado o la cámara se vincula
+    LaunchedEffect(flashlightEnabled, camera) {
+        camera?.cameraControl?.enableTorch(flashlightEnabled)
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (viewModel.isCameraGranted) {
@@ -74,7 +81,7 @@ fun AIScreen(viewModel: MainViewModel) {
                         val selector = CameraSelector.DEFAULT_BACK_CAMERA
                         try {
                             proveedor.unbindAll()
-                            proveedor.bindToLifecycle(
+                            camera = proveedor.bindToLifecycle(
                                 cicloVida, 
                                 selector, 
                                 preview, 
@@ -120,7 +127,22 @@ fun AIScreen(viewModel: MainViewModel) {
         }
 
         Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(modifier = Modifier.height(32.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(
+                    onClick = { flashlightEnabled = !flashlightEnabled },
+                    modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = if (flashlightEnabled) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                        contentDescription = "Linterna",
+                        tint = if (flashlightEnabled) Color.Yellow else Color.White
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
             EtiquetaDistancia(estadoDistancia)
             Spacer(modifier = Modifier.weight(1f))
 
